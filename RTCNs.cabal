@@ -1,0 +1,62 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           RTCNs
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/EgorLappo/RTCNs#readme>
+homepage:       https://github.com/EgorLappo/RTCNs#readme
+bug-reports:    https://github.com/EgorLappo/RTCNs/issues
+author:         Egor Lappo
+maintainer:     egor@ccrma.stanford.edu
+copyright:      Copyright: (c) 2023 Egor Lappo
+license:        BSD3
+build-type:     Simple
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/EgorLappo/RTCNs
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_RTCNs
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      base >=4.7 && <5
+    , containers
+  default-language: Haskell2010
+
+executable RTCNs-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_RTCNs
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      RTCNs
+    , base >=4.7 && <5
+    , containers
+  default-language: Haskell2010
+
+test-suite RTCNs-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_RTCNs
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      RTCNs
+    , base >=4.7 && <5
+    , containers
+  default-language: Haskell2010
