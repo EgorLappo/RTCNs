@@ -1,0 +1,13 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "RTCNs:lib"
+
+    - path: "./app/Main.hs"
+      component: "RTCNs:exe:RTCNs-exe"
+
+    - path: "./app/Paths_RTCNs.hs"
+      component: "RTCNs:exe:RTCNs-exe"
+
+    - path: "./test"
+      component: "RTCNs:test:RTCNs-test"
