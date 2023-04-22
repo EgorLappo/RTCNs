@@ -15,6 +15,14 @@ import qualified Data.Array                 as A
 import qualified Data.IntMap.Strict         as IMap
 import qualified Data.IntSet                as ISet
 
+--- DEBUG CODE: very useful, can be used with `seq` as
+-- `seq (dbg x) y` to print out the value of x and return y
+import           System.IO.Unsafe
+
+dbg :: Show a => a -> a
+dbg a = unsafePerformIO $ do
+  print a
+  return a
 
 -- non-recursive type for nodes in adjacency lists
 -- allows us to use IntMap (Node Int) as a main type, rather than [[Int]]
@@ -38,6 +46,13 @@ type RPN = IntMap Node
 
 type AdjacencyMatrix = A.Array (Int, Int) Bool
 
+oneComponentNormalNetworks :: Int -> Int -> [RPN]
+oneComponentNormalNetworks n k = filter isNormal $ oneComponentTCNs n k
+  where isNormal net = all (\(i, node) -> case node of
+          RetNode _ -> let [p1, p2] = parents net i in not $ comparable net p1 p2
+          _         -> True) $ IMap.toList net
+
+
 -- generate different RPNs
 -- almost Theorem 13 in https://doi.org/10.1016/j.jcss.2020.06.001
 oneComponentTCNs :: Int -> Int -> [RPN]
@@ -46,11 +61,12 @@ oneComponentTCNs n k
   | n == 0 = [IMap.empty]
   | n == 1 = [IMap.fromList [(1, LeafNode)]]
   | k == 0 = trees n
+  | k > n - 1 = error "oneComponentTCNs: k must be less than n - 1"
   | otherwise = let
       -- we will insert a new reticulation node whose child is a leaf into each of the ocTCNs with n-1 leaves and k-1 reticulations
       nets = oneComponentTCNs (n-1) (k-1)
       -- possible locations of where to insert a reticulation node
-      pss = pairs . labels <$> nets
+      pss = pairs . labels . filterLeaves  <$> nets
     in concatMap (\(net, ps) -> concatMap (insertReticulation net) ps) $ zip nets pss
   where
     -- number of nodes in each source network is the same
@@ -60,7 +76,11 @@ oneComponentTCNs n k
     -- all pairs of labels in a network (n + n choose 2)
     pairs l = zip l l ++ [(x,y) | (x:ys) <- tails l, y <- ys]
 
-    -- we are adding four nodes to the network (a reticulation node, two tree nodes, and a leaf node)
+    -- filter out the leaves that are children of reticulation nodes
+    filterLeaves :: RPN -> RPN
+    filterLeaves net = IMap.filterWithKey (\key _ ->
+      isRoot net key || not (isLeaf net key) || not (isRetNode net $ head $ parents net key)) net
+
     insertReticulation :: RPN -> (Int, Int) -> [RPN]
     insertReticulation net (i, j) = do
       afterOne <- insertAbove net i (nNodes + 1) (nNodes + 3)
@@ -178,8 +198,8 @@ tcn d = all (\case
   _ -> True) d
 
 -- an RPN is one-component when children of RetNodes are LeafNodes
-oneComponent :: RPN -> Bool
-oneComponent d = all (\case
+isOneComponent :: RPN -> Bool
+isOneComponent d = all (\case
   RetNode i -> (case d ! i of
     LeafNode -> True
     _        -> False)
@@ -299,6 +319,21 @@ isRetNode :: RPN -> Int -> Bool
 isRetNode d i = case d ! i of
   RetNode _ -> True
   _         -> False
+
+isLeaf :: RPN -> Int -> Bool
+isLeaf d i = case d ! i of
+  LeafNode -> True
+  _        -> False
+
+isTreeNode :: RPN -> Int -> Bool
+isTreeNode d i = case d ! i of
+  TreeNode _ _ -> True
+  _            -> False
+
+isSubdivNode :: RPN -> Int -> Bool
+isSubdivNode d i = case d ! i of
+  SubdivNode _ -> True
+  _            -> False
 
 relabelTree :: RPN -> RPN
 relabelTree t
