@@ -6,8 +6,8 @@
 
 resolver: nightly-2023-04-17
 
-nix:
-  enable: true
+# nix:
+#   enable: true
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.

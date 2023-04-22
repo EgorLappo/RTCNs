@@ -14,6 +14,8 @@ description:         Please see the README on GitHub at <https://github.com/Egor
 dependencies:
 - base >= 4.7 && < 5
 - containers
+- array
+- mtl
 
 ghc-options:
 - -Wall
