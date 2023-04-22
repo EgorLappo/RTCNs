@@ -16,6 +16,8 @@ dependencies:
 - containers
 - array
 - mtl
+- fgl
+- graphviz
 
 ghc-options:
 - -Wall

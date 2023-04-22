@@ -52,19 +52,27 @@ oneComponentNormalNetworks n k = filter isNormal $ oneComponentTCNs n k
           RetNode _ -> let [p1, p2] = parents net i in not $ comparable net p1 p2
           _         -> True) $ IMap.toList net
 
-
 -- generate different RPNs
+
 -- almost Theorem 13 in https://doi.org/10.1016/j.jcss.2020.06.001
+-- but without the (n choose k) factor
 oneComponentTCNs :: Int -> Int -> [RPN]
-oneComponentTCNs n k
+oneComponentTCNs = oneComponentTCNsFromTrees trees
+
+unlabeledOneComponentTCNs :: Int -> Int -> [RPN]
+unlabeledOneComponentTCNs = oneComponentTCNsFromTrees unlabeledTrees
+
+-- main function, with f being the tree-generation function
+oneComponentTCNsFromTrees :: (Int -> [RPN]) -> Int -> Int -> [RPN]
+oneComponentTCNsFromTrees f n k
   | n < 0 || k < 0 = error "oneComponentTCNs: n and k must be non-negative"
   | n == 0 = [IMap.empty]
   | n == 1 = [IMap.fromList [(1, LeafNode)]]
-  | k == 0 = trees n
+  | k == 0 = f n
   | k > n - 1 = error "oneComponentTCNs: k must be less than n - 1"
   | otherwise = let
       -- we will insert a new reticulation node whose child is a leaf into each of the ocTCNs with n-1 leaves and k-1 reticulations
-      nets = oneComponentTCNs (n-1) (k-1)
+      nets = oneComponentTCNsFromTrees f (n-1) (k-1)
       -- possible locations of where to insert a reticulation node
       pss = pairs . labels . filterLeaves  <$> nets
     in concatMap (\(net, ps) -> concatMap (insertReticulation net) ps) $ zip nets pss
@@ -178,6 +186,18 @@ unlabeledTrees n
         return $ IMap.insert (2*n-1) (TreeNode (2*k-1) (2*n-2)) $ IMap.union l (incrementLabelsBy (2*k - 1) r)
   where incrementLabelsBy i = fmap (fmap (+i)) . IMap.mapKeys (+i)
         pairs l = zip l l ++ [(x,y) | (x:ys) <- tails l, y <- ys]
+
+-- all partitions of the list xs
+-- https://stackoverflow.com/questions/35423903/haskell-all-possible-partitions-of-a-list
+partitions :: [a] -> [[[a]]]
+partitions []  = [[]]
+partitions (x:xs) = do
+    yss <- partitions xs
+    bloat x yss
+  where
+    bloat :: a -> [[a]] -> [[[a]]]
+    bloat z  []      = [[[z]]]
+    bloat z (zs:zss) = ((z:zs):zss) : map (zs:) (bloat z zss)
 
 -- useful predicates
 
