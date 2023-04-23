@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module RPN (RPN, Node, Node'(..), ocNormalNetworks, ocTCNList, ocTCNListWithTrees, ocTCNs, ocTCNTops, ocTCNTopList, ocTCNTopListWithTrees, planeTrees, trees, treesList, unlabeledTrees, unlabeledTreesList, keepNonIsomorphic, isIsomorphic, comparable, tcn, isNormal) where
+module RPN (RPN, Node, Node'(..), ocNormalNetworks, ocTCNList, ocTCNListWithTrees, ocTCNs, ocTCNTops, ocTCNTopList, ocTCNTopListWithTrees, planeTrees, trees, treesList, unlabeledTrees, unlabeledTreesList, keepNonIsomorphic, isIsomorphic, keepReduced, isReduced, comparable, tcn, isNormal) where
 -- code for RPNs (rooted phylogenetic networks)
 -- an attempt to start a codebase that can help work with phylogenetic network maths
 
@@ -413,6 +413,17 @@ comparable d i j = i `elem` descendants d j || j `elem` descendants d i
 
 
 -- ********************** helper functions  **********************
+
+keepReduced :: [RPN] -> [RPN]
+keepReduced = filter isReduced
+
+isReduced :: RPN -> Bool
+-- an RPN is reduced if either it is of size 1 or 2, or if both descendants of the root are not leaves
+isReduced d
+  | IMap.size d < 3 = True
+  | otherwise = case d ! root d of
+      TreeNode l r -> not (isLeaf d l || isLeaf d r)
+      _            -> False
 
 adjacencyMatrix :: RPN -> AdjacencyMatrix
 adjacencyMatrix d = A.array ((1, 1), (n, n)) [((i, j), isChild d i j) | i <- [1..n], j <- [1..n]]
