@@ -420,7 +420,7 @@ keepReduced = filter isReduced
 isReduced :: RPN -> Bool
 -- an RPN is reduced if either it is of size 1 or 2, or if both descendants of the root are not leaves
 isReduced d
-  | nLeaves d < 3 = True
+  | nLeaves d <= 3 = True
   | otherwise = case d ! root d of
       TreeNode l r -> not (isLeaf d l || isLeaf d r)
       _            -> False

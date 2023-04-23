@@ -1,0 +1,1 @@
+[(1,LeafNode),(2,LeafNode),(3,TreeNode 1 2),(4,LeafNode),(5,LeafNode),(6,TreeNode 4 5),(7,TreeNode 3 6)]
