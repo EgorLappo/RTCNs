@@ -2,8 +2,9 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Lib where
+module RPN (RPN, Node, Node'(..), ocNormalNetworks, ocTCNList, ocTCNListWithTrees, ocTCNs, ocTCNTops, ocTCNTopList, ocTCNTopListWithTrees, planeTrees, trees, treesList, unlabeledTrees, unlabeledTreesList, keepNonIsomorphic, isIsomorphic, comparable, tcn, isNormal) where
 -- code for RPNs (rooted phylogenetic networks)
 -- an attempt to start a codebase that can help work with phylogenetic network maths
 
@@ -17,7 +18,7 @@ import qualified Data.IntSet                as ISet
 
 --- DEBUG CODE: very useful, can be used with `seq` as
 -- `seq (dbg x) y` to print out the value of x and return y
-import           System.IO.Unsafe
+import           System.IO.Unsafe           (unsafePerformIO)
 
 dbg :: Show a => a -> a
 dbg a = unsafePerformIO $ do
@@ -46,40 +47,42 @@ type RPN = IntMap Node
 
 type AdjacencyMatrix = A.Array (Int, Int) Bool
 
-oneComponentNormalNetworks :: Int -> Int -> [RPN]
-oneComponentNormalNetworks n k = filter isNormal $ oneComponentTCNs n k
-  where isNormal net = all (\(i, node) -> case node of
+type Isomorphism = [(Int, Int)]
+
+-- ********************** generating networks **********************
+
+ocNormalNetworks :: Int -> Int -> [RPN]
+ocNormalNetworks n k = filter isNormal $ ocTCNs n k
+
+isNormal :: RPN -> Bool
+isNormal net = all (\(i, node) -> case node of
           RetNode _ -> let [p1, p2] = parents net i in not $ comparable net p1 p2
           _         -> True) $ IMap.toList net
 
--- generate different RPNs
-
 -- almost Theorem 13 in https://doi.org/10.1016/j.jcss.2020.06.001
 -- but without the (n choose k) factor
-oneComponentTCNs :: Int -> Int -> [RPN]
-oneComponentTCNs = oneComponentTCNsFromTrees trees
-
-unlabeledOneComponentTCNs :: Int -> Int -> [RPN]
-unlabeledOneComponentTCNs = oneComponentTCNsFromTrees unlabeledTrees
+ocTCNs' :: Int -> Int -> [RPN]
+ocTCNs' = ocTCNsFromTrees trees
 
 -- main function, with f being the tree-generation function
-oneComponentTCNsFromTrees :: (Int -> [RPN]) -> Int -> Int -> [RPN]
-oneComponentTCNsFromTrees f n k
-  | n < 0 || k < 0 = error "oneComponentTCNs: n and k must be non-negative"
+-- unmemoized
+ocTCNsFromTrees :: (Int -> [RPN]) -> Int -> Int -> [RPN]
+ocTCNsFromTrees f n k
+  | n < 0 || k < 0 = error "ocTCNs: n and k must be non-negative"
   | n == 0 = [IMap.empty]
   | n == 1 = [IMap.fromList [(1, LeafNode)]]
   | k == 0 = f n
-  | k > n - 1 = error "oneComponentTCNs: k must be less than n - 1"
+  | k > n - 1 = error "ocTCNs: k must be less than n - 1"
   | otherwise = let
       -- we will insert a new reticulation node whose child is a leaf into each of the ocTCNs with n-1 leaves and k-1 reticulations
-      nets = oneComponentTCNsFromTrees f (n-1) (k-1)
+      nets = ocTCNsFromTrees f (n-1) (k-1)
       -- possible locations of where to insert a reticulation node
       pss = pairs . labels . filterLeaves  <$> nets
     in concatMap (\(net, ps) -> concatMap (insertReticulation net) ps) $ zip nets pss
   where
     -- number of nodes in each source network is the same
     -- proposition 1 in https://doi.org/10.1016/j.jcss.2020.06.001
-    nNodes = (n-1) + (k-1) + (n + k - 3)
+    nNodes = n-1 + (k-1) + (n + k - 3)
 
     -- all pairs of labels in a network (n + n choose 2)
     pairs l = zip l l ++ [(x,y) | (x:ys) <- tails l, y <- ys]
@@ -95,42 +98,173 @@ oneComponentTCNsFromTrees f n k
       afterTwo <- insertAbove afterOne j (nNodes + 2) (nNodes + 3)
       return $ IMap.union afterTwo (IMap.fromList [(nNodes + 3, RetNode (nNodes + 4)), (nNodes + 4, LeafNode)])
 
-    -- insert a tree node with a specified label above a given node
-    -- if we are inserting above the root, we need to create a new root
-    -- if we are inserting above the reticulation node, we have two possibilities
-    -- labels are taken care of by the caller
-    insertAbove :: RPN -> Int -> Int -> Int -> [RPN]
-    insertAbove net i treeNodeLabel retNodeLabel
-      | isRoot net i = [IMap.insert treeNodeLabel (TreeNode i retNodeLabel) net]
-      | isRetNode net i = let
-          [parentLeft, parentRight] = parents net i
-          (TreeNode plLeftChild plRightChild) =  net ! parentLeft
-          (TreeNode prLeftChild prRightChild) =  net ! parentRight
-          newTCNLeft = if plLeftChild == i
-            then IMap.insert parentLeft (TreeNode treeNodeLabel plRightChild) net
-            else IMap.insert parentLeft (TreeNode plLeftChild treeNodeLabel) net
-          newTCNRight = if prLeftChild == i
-            then IMap.insert parentRight (TreeNode treeNodeLabel prRightChild) net
-            else IMap.insert parentRight (TreeNode prLeftChild treeNodeLabel) net
-        in IMap.insert treeNodeLabel (TreeNode i retNodeLabel) <$> [newTCNLeft, newTCNRight]
-      | otherwise = let
-          [parent] = parents net i
-          (TreeNode leftChild rightChild) = net ! parent
-          newTCN = if leftChild == i
-            then IMap.insert parent (TreeNode treeNodeLabel rightChild) net
-            else IMap.insert parent (TreeNode leftChild treeNodeLabel) net
-        in [IMap.insert treeNodeLabel (TreeNode i retNodeLabel) newTCN]
+ocTCNs :: Int -> Int -> [RPN]
+ocTCNs n k = ocTCNList n k !! k
+
+ocTCNList :: Int -> Int -> [[RPN]]
+ocTCNList n = ocTCNListWithTrees (treesList n) n
+
+ocTCNListWithTrees :: [[RPN]] -> Int -> Int -> [[RPN]]
+ocTCNListWithTrees ts n k =
+-- the key here is that we only refer to the (n-1) (k-1) case in the recursion, so we only need to memoize the "diagonal"
+  let recNets = [ocTCNsMemo ts recNets (n-k+i) i  | i <- [0..k]] in recNets
+
+ocTCNsMemo :: [[RPN]] -> [[RPN]] -> Int -> Int -> [RPN]
+ocTCNsMemo ts recNets n k
+  | n < 0 || k < 0 = error "ocTCNs: n and k must be non-negative"
+  | n == 0 = [IMap.empty]
+  | n == 1 = [IMap.fromList [(1, LeafNode)]]
+  | k == 0 = ts !! (n - 1)
+  | k > n - 1 = error "ocTCNs: k must be less than n - 1"
+  | otherwise =  let
+        nets = recNets !! (k-1)
+        pss = pairs . labels . filterLeaves  <$> nets
+      in concatMap (\(net, ps) -> concatMap (insertReticulation net) ps) $ zip nets pss
+    where
+      nNodes = n-1 + (k-1) + (n + k - 3)
+      pairs l = zip l l ++ [(x,y) | (x:ys) <- tails l, y <- ys]
+
+      filterLeaves :: RPN -> RPN
+      filterLeaves net = IMap.filterWithKey (\key _ ->
+        isRoot net key || not (isLeaf net key) || not (isRetNode net $ head $ parents net key)) net
+
+      insertReticulation :: RPN -> (Int, Int) -> [RPN]
+      insertReticulation net (i, j) = do
+        afterOne <- insertAbove net i (nNodes + 1) (nNodes + 3)
+        afterTwo <- insertAbove afterOne j (nNodes + 2) (nNodes + 3)
+        return $ IMap.union afterTwo (IMap.fromList [(nNodes + 3, RetNode (nNodes + 4)), (nNodes + 4, LeafNode)])
+
+-- generates nonisomorphic one-component TCNs (i.e. topologies) with n leaves and k reticulations
+ocTCNTops' :: Int -> Int -> [RPN]
+ocTCNTops' n k
+  | n < 0 || k < 0 = error "ocTCNs: n and k must be non-negative"
+  | n == 0 = [IMap.empty]
+  | n == 1 = [IMap.fromList [(1, LeafNode)]]
+  | k == 0 = unlabeledTrees n
+  | k > n - 1 = error "ocTCNs: k must be less than n - 1"
+  | otherwise = let
+      -- we will insert a new reticulation node whose child is a leaf into each of the ocTCNs with n-1 leaves and k-1 reticulations
+      nets = ocTCNTops' (n-1) (k-1)
+      -- possible locations of where to insert a reticulation node
+      pss = pairs . labels . filterLeaves  <$> nets
+    in keepNonIsomorphic $ concatMap (\(net, ps) -> concatMap (insertReticulation net) ps) $ zip nets pss
+  where
+    -- number of nodes in each source network is the same
+    -- proposition 1 in https://doi.org/10.1016/j.jcss.2020.06.001
+    nNodes = n-1 + (k-1) + (n + k - 3)
+
+    -- all pairs of labels in a network (n + n choose 2)
+    pairs l = zip l l ++ [(x,y) | (x:ys) <- tails l, y <- ys]
+
+    -- filter out the leaves that are children of reticulation nodes
+    filterLeaves :: RPN -> RPN
+    filterLeaves net = IMap.filterWithKey (\key _ ->
+      isRoot net key || not (isLeaf net key) || not (isRetNode net $ head $ parents net key)) net
+
+    insertReticulation :: RPN -> (Int, Int) -> [RPN]
+    insertReticulation net (i, j) = do
+      afterOne <- insertAbove net i (nNodes + 1) (nNodes + 3)
+      afterTwo <- insertAbove afterOne j (nNodes + 2) (nNodes + 3)
+      return $ IMap.union afterTwo (IMap.fromList [(nNodes + 3, RetNode (nNodes + 4)), (nNodes + 4, LeafNode)])
+
+ocTCNTops :: Int -> Int -> [RPN]
+ocTCNTops n k = ocTCNTopList n k !! k
+
+ocTCNTopList :: Int -> Int -> [[RPN]]
+ocTCNTopList n = ocTCNTopListWithTrees (unlabeledTreesList n) n
+
+ocTCNTopListWithTrees :: [[RPN]] -> Int -> Int -> [[RPN]]
+ocTCNTopListWithTrees ts n k =
+  let recNets = [ocTCNTopsMemo ts recNets (n-k+i) i  | i <- [0..k]] in recNets
+
+ocTCNTopsMemo :: [[RPN]] -> [[RPN]] -> Int -> Int -> [RPN]
+ocTCNTopsMemo ts recNets n k
+  | n < 0 || k < 0 = error "ocTCNs: n and k must be non-negative"
+  | n == 0 = [IMap.empty]
+  | n == 1 = [IMap.fromList [(1, LeafNode)]]
+  | k == 0 = ts !! (n - 1)
+  | k > n - 1 = error "ocTCNs: k must be less than n - 1"
+  | otherwise =  let
+        nets = recNets !! (k-1)
+        pss = pairs . labels . filterLeaves  <$> nets
+      in keepNonIsomorphic $ concatMap (\(net, ps) -> concatMap (insertReticulation net) ps) $ zip nets pss
+    where
+      nNodes = n-1 + (k-1) + (n + k - 3)
+      pairs l = zip l l ++ [(x,y) | (x:ys) <- tails l, y <- ys]
+
+      filterLeaves :: RPN -> RPN
+      filterLeaves net = IMap.filterWithKey (\key _ ->
+        isRoot net key || not (isLeaf net key) || not (isRetNode net $ head $ parents net key)) net
+
+      insertReticulation :: RPN -> (Int, Int) -> [RPN]
+      insertReticulation net (i, j) = do
+        afterOne <- insertAbove net i (nNodes + 1) (nNodes + 3)
+        afterTwo <- insertAbove afterOne j (nNodes + 2) (nNodes + 3)
+        return $ IMap.union afterTwo (IMap.fromList [(nNodes + 3, RetNode (nNodes + 4)), (nNodes + 4, LeafNode)])
+
+-- insert a tree node with a specified label above a given node
+-- if we are inserting above the root, we need to create a new root
+-- if we are inserting above the reticulation node, we have two possibilities
+-- labels are taken care of by the caller
+insertAbove :: RPN -> Int -> Int -> Int -> [RPN]
+insertAbove net i treeNodeLabel retNodeLabel
+  | isRoot net i = [IMap.insert treeNodeLabel (TreeNode i retNodeLabel) net]
+  | isRetNode net i = let
+      [parentLeft, parentRight] = parents net i
+      (TreeNode plLeftChild plRightChild) =  net ! parentLeft
+      (TreeNode prLeftChild prRightChild) =  net ! parentRight
+      newTCNLeft = if plLeftChild == i
+        then IMap.insert parentLeft (TreeNode treeNodeLabel plRightChild) net
+        else IMap.insert parentLeft (TreeNode plLeftChild treeNodeLabel) net
+      newTCNRight = if prLeftChild == i
+        then IMap.insert parentRight (TreeNode treeNodeLabel prRightChild) net
+        else IMap.insert parentRight (TreeNode prLeftChild treeNodeLabel) net
+    in IMap.insert treeNodeLabel (TreeNode i retNodeLabel) <$> [newTCNLeft, newTCNRight]
+  | otherwise = let
+      [parent] = parents net i
+      (TreeNode leftChild rightChild) = net ! parent
+      newTCN = if leftChild == i
+        then IMap.insert parent (TreeNode treeNodeLabel rightChild) net
+        else IMap.insert parent (TreeNode leftChild treeNodeLabel) net
+    in [IMap.insert treeNodeLabel (TreeNode i retNodeLabel) newTCN]
+
+-- ********************** generating trees **********************
 
 -- labeled trees with n leaves
 -- map (length.trees) [1..] = [1,1,3,15,105,945,10395,..] = (2n - 3)!!
-trees :: Int -> [RPN]
-trees n
+trees' :: Int -> [RPN]
+trees' n
   | n < 0 = error "trees: n must be non-negative"
   | n == 0 = [IMap.empty]
   | n == 1 = [IMap.fromList [(1, LeafNode)]]
-  | otherwise = concatMap (\t -> insertAbove t <$> labels t) $ trees (n-1)
+  | otherwise = concatMap (\t -> insertAbove' t <$> labels t) $ trees' (n-1)
   where
-    insertAbove t i
+    insertAbove' t i
+      | isRoot t i = IMap.union (IMap.fromList [(2*n-2, LeafNode), (2*n-1, TreeNode i (2*n-2))]) t
+      | otherwise =
+        let p = head (parents t i)
+            (TreeNode l r) = t ! p
+        in if l == i
+              then IMap.union (IMap.fromList [(2*n-2, LeafNode), (2*n-1, TreeNode i (2*n-2)), (p, TreeNode (2*n-1) r)]) t
+              else IMap.union (IMap.fromList [(2*n-2, LeafNode), (2*n-1, TreeNode (2*n-2) i), (p, TreeNode l (2*n-1))]) t
+
+-- this is an appropriate memoized version of trees'
+trees :: Int -> [RPN]
+trees n = treesList n !! (n-1)
+
+treesList :: Int -> [[RPN]]
+treesList nmax =
+  let ts = [treesMemo ts n | n <- [1..nmax]]
+  in ts
+
+treesMemo :: [[RPN]] -> Int -> [RPN]
+treesMemo ts n
+  | n < 0 = error "trees: n must be non-negative"
+  | n == 0 = [IMap.empty]
+  | n == 1 = [IMap.fromList [(1, LeafNode)]]
+  | otherwise = concatMap (\t -> insertAbove' t <$> labels t) $ ts !! (n-2)
+  where
+    insertAbove' t i
       | isRoot t i = IMap.union (IMap.fromList [(2*n-2, LeafNode), (2*n-1, TreeNode i (2*n-2))]) t
       | otherwise =
         let p = head (parents t i)
@@ -155,8 +289,8 @@ planeTrees n
 
 -- tree topologies with n leaves
 -- map (length.unlabeledTrees) [1..] = [1,1,1,2,3,6,11,23,46,98,207,451,...]
-unlabeledTrees :: Int -> [RPN]
-unlabeledTrees n
+unlabeledTrees' :: Int -> [RPN]
+unlabeledTrees' n
   | n < 0 = error "unlabeledTrees: n must be non-negative"
   | n == 0 = [IMap.empty]
   | n == 1 = [IMap.fromList [(1, LeafNode)]]
@@ -167,11 +301,11 @@ unlabeledTrees n
         i = (n - 2) `div` 2
         unbalancedTrees = do
           k <- [1..i]
-          l <- unlabeledTrees k
-          r <- unlabeledTrees (n-k)
+          l <- unlabeledTrees' k
+          r <- unlabeledTrees' (n-k)
           return $ IMap.insert (2*n-1) (TreeNode (2*k-1) (2*n-2)) $ IMap.union l (incrementLabelsBy (2*k - 1) r)
 
-        halfTrees = unlabeledTrees (n `div` 2)
+        halfTrees = unlabeledTrees' (n `div` 2)
         balancedTrees = do
           (l, r) <- pairs halfTrees
           return $ IMap.insert (2*n-1) (TreeNode (2*(n `div` 2)-1) (2*n-2)) $ IMap.union l (incrementLabelsBy (2*(n `div` 2)-1) r)
@@ -181,25 +315,73 @@ unlabeledTrees n
         i = (n - 1) `div` 2
       in do
         k <- [1..i]
-        l <- unlabeledTrees k
-        r <- unlabeledTrees (n-k)
+        l <- unlabeledTrees' k
+        r <- unlabeledTrees' (n-k)
         return $ IMap.insert (2*n-1) (TreeNode (2*k-1) (2*n-2)) $ IMap.union l (incrementLabelsBy (2*k - 1) r)
   where incrementLabelsBy i = fmap (fmap (+i)) . IMap.mapKeys (+i)
         pairs l = zip l l ++ [(x,y) | (x:ys) <- tails l, y <- ys]
 
--- all partitions of the list xs
--- https://stackoverflow.com/questions/35423903/haskell-all-possible-partitions-of-a-list
-partitions :: [a] -> [[[a]]]
-partitions []  = [[]]
-partitions (x:xs) = do
-    yss <- partitions xs
-    bloat x yss
-  where
-    bloat :: a -> [[a]] -> [[[a]]]
-    bloat z  []      = [[[z]]]
-    bloat z (zs:zss) = ((z:zs):zss) : map (zs:) (bloat z zss)
+-- this is an appropriate memoized version of unlabeledTrees'
+unlabeledTrees :: Int -> [RPN]
+unlabeledTrees n = unlabeledTreesList n !! (n-1)
 
--- useful predicates
+unlabeledTreesList :: Int -> [[RPN]]
+unlabeledTreesList nmax =
+  let ts = [unlabeledTreesMemo ts n | n <- [1..nmax]]
+  in ts
+
+unlabeledTreesMemo :: [[RPN]] -> Int -> [RPN]
+unlabeledTreesMemo ts n
+  | n < 0 = error "unlabeledTrees: n must be non-negative"
+  | n == 0 = [IMap.empty]
+  | n == 1 = [IMap.fromList [(1, LeafNode)]]
+  | n == 2 = [IMap.fromList [(1,LeafNode),(2,LeafNode),(3,TreeNode 1 2)]]
+  | n == 3 = [IMap.fromList [(1,LeafNode),(2,LeafNode),(3,LeafNode),(4,TreeNode 2 3),(5,TreeNode 1 4)]]
+  | even n =
+      let
+        i = (n - 2) `div` 2
+        unbalancedTrees = do
+          k <- [1..i]
+          l <- ts !! (k-1)
+          r <- ts !! (n-k-1)
+          return $ IMap.insert (2*n-1) (TreeNode (2*k-1) (2*n-2)) $ IMap.union l (incrementLabelsBy (2*k - 1) r)
+
+        halfTrees = ts !! ((n `div` 2) - 1)
+        balancedTrees = do
+          (l, r) <- pairs halfTrees
+          return $ IMap.insert (2*n-1) (TreeNode (2*(n `div` 2)-1) (2*n-2)) $ IMap.union l (incrementLabelsBy (2*(n `div` 2)-1) r)
+      in unbalancedTrees ++ balancedTrees
+  | otherwise =
+      let
+        i = (n - 1) `div` 2
+      in do
+        k <- [1..i]
+        l <- ts !! (k-1)
+        r <- ts !! (n-k-1)
+        return $ IMap.insert (2*n-1) (TreeNode (2*k-1) (2*n-2)) $ IMap.union l (incrementLabelsBy (2*k - 1) r)
+  where incrementLabelsBy i = fmap (fmap (+i)) . IMap.mapKeys (+i)
+        pairs l = zip l l ++ [(x,y) | (x:ys) <- tails l, y <- ys]
+
+
+-- ********************** RPN isomorphism **********************
+
+isIsomorphic :: RPN -> RPN -> Bool
+isIsomorphic net1 net2 = tryMatch net1 net2 (root net1) (root net2)
+
+tryMatch :: RPN -> RPN -> Int -> Int -> Bool
+tryMatch net1 net2 v1 v2
+  | isLeaf net1 v1 && isLeaf net2 v2 = True
+  | not $ sameNodeType (net1 ! v1) (net2 ! v2) = False
+  | otherwise = case (net1 ! v1, net2 ! v2) of
+    (TreeNode l1 r1, TreeNode l2 r2) -> tryMatch net1 net2 l1 l2 && tryMatch net1 net2 r1 r2 || tryMatch net1 net2 l1 r2 && tryMatch net1 net2 r1 l2
+    (RetNode i1, RetNode i2) -> tryMatch net1 net2 i1 i2
+    _ -> error "tryMatch: please don't compute isomorphisms with subdivision edges present in the RPNs"
+
+keepNonIsomorphic :: [RPN] -> [RPN]
+keepNonIsomorphic [] = []
+keepNonIsomorphic (x:xs) = x : keepNonIsomorphic (filter (not . isIsomorphic x) xs)
+
+-- ********************** useful predicates **********************
 
 -- an RPN is a tree when it has no subdiv and no ret nodes
 tree :: RPN -> Bool
@@ -218,8 +400,8 @@ tcn d = all (\case
   _ -> True) d
 
 -- an RPN is one-component when children of RetNodes are LeafNodes
-isOneComponent :: RPN -> Bool
-isOneComponent d = all (\case
+isoc :: RPN -> Bool
+isoc d = all (\case
   RetNode i -> (case d ! i of
     LeafNode -> True
     _        -> False)
@@ -229,14 +411,8 @@ isOneComponent d = all (\case
 comparable :: RPN -> Int -> Int -> Bool
 comparable d i j = i `elem` descendants d j || j `elem` descendants d i
 
--- two nodes are equivalent if they can be interchanged by a symmetry of the directed acyclic graph
--- this is a hard problem,,, possibly could be solved with adjacency matrices
-equivalent :: RPN -> Int -> Int -> Bool
-equivalent = undefined
 
-
-
--- helper functions
+-- ********************** helper functions  **********************
 
 adjacencyMatrix :: RPN -> AdjacencyMatrix
 adjacencyMatrix d = A.array ((1, 1), (n, n)) [((i, j), isChild d i j) | i <- [1..n], j <- [1..n]]
@@ -355,6 +531,14 @@ isSubdivNode d i = case d ! i of
   SubdivNode _ -> True
   _            -> False
 
+sameNodeType :: Node -> Node -> Bool
+sameNodeType (RetNode _) (RetNode _)       = True
+sameNodeType LeafNode LeafNode             = True
+sameNodeType (TreeNode _ _) (TreeNode _ _) = True
+sameNodeType (SubdivNode _) (SubdivNode _) = True
+sameNodeType _ _                           = False
+
+
 relabelTree :: RPN -> RPN
 relabelTree t
   | not (tree t) = error "relabelTree: input is not a tree"
@@ -422,3 +606,15 @@ printRPN net =
           RetNode c    -> show i ++ ": " ++ "R " ++ show c) <$> IMap.toList net)
         y = "[" ++ intercalate ", " x ++ "]"
       in print y
+
+-- all partitions of the list xs
+-- https://stackoverflow.com/questions/35423903/haskell-all-possible-partitions-of-a-list
+partitions :: [a] -> [[[a]]]
+partitions []  = [[]]
+partitions (x:xs) = do
+    yss <- partitions xs
+    bloat x yss
+  where
+    bloat :: a -> [[a]] -> [[[a]]]
+    bloat z  []      = [[[z]]]
+    bloat z (zs:zss) = ((z:zs):zss) : map (zs:) (bloat z zss)

@@ -23,7 +23,9 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      Antichains
+      RPN
+      Viz
   other-modules:
       Paths_RTCNs
   hs-source-dirs:
@@ -36,6 +38,7 @@ library
     , fgl
     , graphviz
     , mtl
+    , text
   default-language: Haskell2010
 
 executable RTCNs-exe
@@ -53,6 +56,7 @@ executable RTCNs-exe
     , fgl
     , graphviz
     , mtl
+    , text
   default-language: Haskell2010
 
 test-suite RTCNs-test
@@ -71,4 +75,5 @@ test-suite RTCNs-test
     , fgl
     , graphviz
     , mtl
+    , text
   default-language: Haskell2010
