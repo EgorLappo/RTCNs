@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module RPN (RPN, Node, Node'(..), ocNormalNetworks, ocTCNList, ocTCNListWithTrees, ocTCNs, ocTCNTops, ocTCNTopList, ocTCNTopListWithTrees, planeTrees, trees, treesList, unlabeledTrees, unlabeledTreesList, keepNonIsomorphic, isIsomorphic, keepReduced, isReduced, comparable, tcn, isNormal) where
+module TCN (RPN, Node, Node'(..), ocNormalNetworks, ocTCNList, ocTCNListWithTrees, ocTCNs, ocTCNTops, ocTCNTopList, ocTCNTopListWithTrees, planeTrees, trees, treesList, unlabeledTrees, unlabeledTreesList, keepNonIsomorphic, isIsomorphic, keepReduced, isReduced, comparable, tcn, isNormal) where
 -- code for RPNs (rooted phylogenetic networks)
 -- an attempt to start a codebase that can help work with phylogenetic network maths
 

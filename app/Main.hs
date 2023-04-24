@@ -7,7 +7,7 @@ import qualified Data.Text.IO       as T
 
 import qualified Data.IntMap.Strict as IMap
 
-import           RPN
+import           TCN
 
 maxN :: Int
 maxN = 7

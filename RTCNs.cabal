@@ -23,8 +23,8 @@ source-repository head
 
 library
   exposed-modules:
-      Antichains
-      RPN
+      RTCN
+      TCN
       Viz
   other-modules:
       Paths_RTCNs
