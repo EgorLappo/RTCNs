@@ -23,9 +23,9 @@ source-repository head
 
 library
   exposed-modules:
+      GraphViz
       RTCN
       TCN
-      Viz
   other-modules:
       Paths_RTCNs
   hs-source-dirs:
