@@ -107,6 +107,13 @@ rtcns' n b = concat [rtcnsWithProfile n p | p <- qProfiles n b]
 rtcns :: Int -> Int -> [RTCN]
 rtcns n r = rtcns' n (n-r-1)
 
+keepNonIsomorphic :: [RTCN] -> [RTCN]
+keepNonIsomorphic [] = []
+keepNonIsomorphic (x:xs) = x : keepNonIsomorphic (filter (not . isIsomorphic x) xs)
+
+isIsomorphic :: RTCN -> RTCN -> Bool
+isIsomorphic _ _ = False -- TODO!
+
 -- helper functions
 
 rtcnToGraph :: RTCN -> G.Gr Int ()
