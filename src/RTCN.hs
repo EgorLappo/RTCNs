@@ -1,15 +1,21 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use record patterns" #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+{-# LANGUAGE LambdaCase #-}
 
-module RTCN (RTCN, Lineages, Lineages'(..), rtcns, rtcnToGraph) where
+module RTCN where -- (RTCN, Lineages, Lineages'(..), rtcns, rtcnTopologies, rtcnToGraph, edgeList, maximalAntichains) where
 
-import           Data.IntMap.Strict                (IntMap, (!))
-import qualified Data.IntMap.Strict                as IMap
+import           Data.IntMap                       (IntMap, (!))
+import qualified Data.IntMap                       as IMap
+import           Data.IntSet                       (IntSet, (\\))
 import qualified Data.IntSet                       as ISet
 
 import           Data.Graph.Inductive              (mkGraph)
 import qualified Data.Graph.Inductive.PatriciaTree as G
+import           Data.List                         (nub)
 
 -- backward construction (proper)
 
@@ -112,7 +118,27 @@ keepNonIsomorphic [] = []
 keepNonIsomorphic (x:xs) = x : keepNonIsomorphic (filter (not . isIsomorphic x) xs)
 
 isIsomorphic :: RTCN -> RTCN -> Bool
-isIsomorphic _ _ = False -- TODO!
+isIsomorphic net1 net2 = tryMatch net1 net2 (root net1) (root net2)
+
+tryMatch :: RTCN -> RTCN -> Int -> Int -> Bool
+tryMatch net1 net2 v1 v2
+  | isLeaf net1 v1 && isLeaf net2 v2 = True
+  | not $ sameNodeType (net1 ! v1) (net2 ! v2) = False
+  | otherwise = case (net1 ! v1, net2 ! v2) of
+      (Branching l1 r1, Branching l2 r2) -> tryMatch net1 net2 l1 l2 && tryMatch net1 net2 r1 r2 || tryMatch net1 net2 l1 r2 && tryMatch net1 net2 r1 l2
+
+      (Reticulation i1 j1 k1, Reticulation i2 j2 k2) ->
+           tryMatch net1 net2 i1 i2 && tryMatch net1 net2 j1 j2 && tryMatch net1 net2 k1 k2
+        || tryMatch net1 net2 i1 j2 && tryMatch net1 net2 j1 i2 && tryMatch net1 net2 k1 k2
+        || tryMatch net1 net2 i1 k2 && tryMatch net1 net2 j1 j2 && tryMatch net1 net2 k1 i2
+        || tryMatch net1 net2 i1 j2 && tryMatch net1 net2 j1 k2 && tryMatch net1 net2 k1 i2
+        || tryMatch net1 net2 i1 k2 && tryMatch net1 net2 j1 i2 && tryMatch net1 net2 k1 j2
+        || tryMatch net1 net2 i1 i2 && tryMatch net1 net2 j1 k2 && tryMatch net1 net2 k1 j2
+
+      _ -> error "tryMatch: please don't compute isomorphisms with subdivision edges present in the RTCNs"
+
+rtcnTopologies :: Int -> Int -> [RTCN]
+rtcnTopologies = ((keepNonIsomorphic . map collapse) .) . rtcns
 
 -- helper functions
 
@@ -134,3 +160,103 @@ replaceLineageLabel x y l = case l of
     Branching i j      -> Branching (f i) (f j)
     Subdiv i           -> Subdiv (f i)
   where f z = if z == x then y else z
+
+isLeaf :: RTCN -> Int -> Bool
+isLeaf net v = case net ! v of
+  Leaf -> True
+  _    -> False
+
+sameNodeType :: Lineages -> Lineages -> Bool
+sameNodeType Leaf Leaf                                 = True
+sameNodeType (Reticulation _ _ _) (Reticulation _ _ _) = True
+sameNodeType (Branching _ _) (Branching _ _)           = True
+sameNodeType (Subdiv _) (Subdiv _)                     = True
+sameNodeType _ _                                       = False
+
+root :: RTCN -> Int
+root net = head $ filter (isRoot net) (labels net)
+  where
+    labels = IMap.keys
+
+isRoot :: RTCN -> Int -> Bool
+isRoot n v = null $ parents n v
+
+isChild :: RTCN -> Int -> Int -> Bool
+isChild n i j = j `elem` children n i
+
+children :: RTCN -> Int -> [Int]
+children n v = case n ! v of
+  Leaf               -> []
+  Reticulation i j k -> [i,j,k]
+  Branching i j      -> [i,j]
+  Subdiv i           -> [i]
+
+parents :: RTCN -> Int -> [Int]
+parents n i = filter (\j -> isChild n j i) $ labels n
+  where
+    labels = IMap.keys
+
+ancestors :: RTCN -> Int -> [Int]
+ancestors n v = case parents n v of
+  [] -> []
+  ps -> ps ++ concatMap (ancestors n) ps
+
+-- *** MAXIMAL ANTICHAINS ***
+
+type Edge = (Int, Int)
+
+edgeList :: RTCN -> [Edge]
+edgeList n = [(i,j) | i <- IMap.keys n, j <- children n i]
+
+isParentEdge :: Edge -> Edge -> Bool
+isParentEdge (_,j) (i',_) = j == i'
+
+isChildEdge :: Edge -> Edge -> Bool
+isChildEdge (i,_) (_,j') = i == j'
+
+parentEdges :: Edge -> [Edge] -> [Int]
+parentEdges e = map fst . filter (\(_, e') -> e' `isParentEdge` e) . zip [0..]
+
+childEdges :: Edge -> [Edge] -> [Int]
+childEdges e = map fst . filter (\(_, e') -> e' `isChildEdge` e) . zip [0..]
+
+maximalAntichains :: RTCN -> [IntSet]
+maximalAntichains net = filter (not . hasComparableLineages) . nub $ go rootEdges
+  where
+    -- get the list of edges in an RTCN DAG, collapsing parallel edges
+    -- this should be all we need to compute antichains in the poset of edges
+    elist = nub $  edgeList net
+
+    -- get the set of children *edges* of each edge
+    allChildren = IMap.fromList $ zip [0..] $ map (`childEdges` elist) elist
+    allParents = IMap.fromList $ zip [0..] $ map (`parentEdges` elist) elist
+    -- root edges are those with no children (there will be one or two of these since we could have collapsed a parallel pair)
+    rootEdges = ISet.fromList $ filter (\e -> null $ allParents ! e) [0..(length elist - 1)]
+
+    allDescendents = IMap.fromList $ zip [0..] $ map (\e -> let cs = childEdges e elist in ISet.fromList . concat $ cs : map (\c -> (elist !! c) `childEdges` elist) cs) elist
+
+    -- self-explanatory
+    isDesc :: Int -> Int -> Bool
+    isDesc i j = i `ISet.member` (allDescendents ! j)
+
+    -- main function
+    -- given a maximal antichain, for each lineage in the chain, we can replace that lineage by a set of its children to get another maximal antichain
+    -- but there are several caveats: first, this only works if we get rid of parallel edges (see above)
+    -- second, we generate some sets which are not antichains, and we need to filter those out
+    go :: IntSet -> [IntSet]
+    go eset
+      | ISet.null eset = []
+      | otherwise = let
+          childrenLineages = IMap.filterWithKey (\k _ -> k `ISet.member` eset) allChildren
+          res = concat $ flip map (IMap.toAscList childrenLineages) $ \case
+              (_, [])      -> []
+              (i, [a])     -> go $ ISet.delete i $ ISet.insert a eset
+              (i, [a,b])   -> go $ ISet.delete i $ ISet.insert a $ ISet.insert b eset
+              (i, [a,b,c]) -> go $ ISet.delete i $ ISet.insert a $ ISet.insert b $ ISet.insert c eset
+              _            -> error "maximalAntichains: unreachable!"
+        in eset : res
+
+    hasComparableLineages :: IntSet -> Bool
+    hasComparableLineages eset = any (\(i,j) -> isDesc i j || isDesc j i) [(i,j) | i <- ISet.toList eset, j <- ISet.toList eset, i /= j]
+
+-- maximalAntichains :: RTCN -> [IntSet]

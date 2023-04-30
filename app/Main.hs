@@ -8,4 +8,4 @@ import           GraphViz
 import           RTCN
 
 main :: IO ()
-main = drawAll "rtcn-pics" 5 4
+main = drawAll "rtcn-pics" 7 5

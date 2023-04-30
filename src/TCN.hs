@@ -545,13 +545,9 @@ children d i = case d ! i of
 isChild :: RPN -> Int -> Int -> Bool
 isChild d i j = j `elem` children d i
 
--- get all ancestors of a node
-ancestors :: RPN -> Int -> [Int]
-ancestors d i = filter (\n -> isChild d n i) (labels d)
-
 -- get all parents of a node
 parents :: RPN -> Int -> [Int]
-parents d i = filter (\j -> isChild d j i) $ ancestors d i
+parents d i = filter (\j -> isChild d j i) $ labels d
 
 root :: RPN -> Int
 root d = head $ filter (isRoot d) (labels d)

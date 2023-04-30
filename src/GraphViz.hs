@@ -16,7 +16,7 @@ rtcnDraw rtcn name = let
 drawAll:: FilePath -> Int -> Int -> IO ()
 drawAll folder n r = sequence_ $ do
   i <- [3..n]
-  j <- [0..(min r (i-1))]
-  (l, net) <- zip [1..] $ rtcns i j
+  j <- [0..(min r (i-2))]
+  (l, net) <- zip [1..] $ rtcnTopologies i j
   return $ rtcnDraw net $ folder <> "/" <> show i <> "_" <> show j <> "_" <> show l <> ".pdf"
 
