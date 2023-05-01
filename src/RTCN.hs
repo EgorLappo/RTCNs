@@ -16,6 +16,8 @@ import qualified Data.IntSet                       as ISet
 import           Data.Graph.Inductive              (mkGraph)
 import qualified Data.Graph.Inductive.PatriciaTree as G
 import           Data.List                         (nub)
+import           Data.Maybe                        (fromJust)
+import           Data.Tuple                        (swap)
 
 -- backward construction (proper)
 
@@ -220,24 +222,20 @@ parentEdges e = map fst . filter (\(_, e') -> e' `isParentEdge` e) . zip [0..]
 childEdges :: Edge -> [Edge] -> [Int]
 childEdges e = map fst . filter (\(_, e') -> e' `isChildEdge` e) . zip [0..]
 
-maximalAntichains :: RTCN -> [IntSet]
-maximalAntichains net = filter (not . hasComparableLineages) . nub $ go rootEdges
+-- the idea is that any finite DAG is a (multifurcating) tree with some edges identified
+-- so we generate all max antichains for that implicit tree, and then filter out the wrong ones
+maximalAntichains :: RTCN -> ([(IntSet, Int)], [Edge])
+maximalAntichains net = (antichains, coverings)
   where
     -- get the list of edges in an RTCN DAG, collapsing parallel edges
     -- this should be all we need to compute antichains in the poset of edges
-    elist = nub $  edgeList net
+    elist = nub $ edgeList net
 
     -- get the set of children *edges* of each edge
     allChildren = IMap.fromList $ zip [0..] $ map (`childEdges` elist) elist
     allParents = IMap.fromList $ zip [0..] $ map (`parentEdges` elist) elist
     -- root edges are those with no children (there will be one or two of these since we could have collapsed a parallel pair)
     rootEdges = ISet.fromList $ filter (\e -> null $ allParents ! e) [0..(length elist - 1)]
-
-    allDescendents = IMap.fromList $ zip [0..] $ map (\e -> let cs = childEdges e elist in ISet.fromList . concat $ cs : map (\c -> (elist !! c) `childEdges` elist) cs) elist
-
-    -- self-explanatory
-    isDesc :: Int -> Int -> Bool
-    isDesc i j = i `ISet.member` (allDescendents ! j)
 
     -- main function
     -- given a maximal antichain, for each lineage in the chain, we can replace that lineage by a set of its children to get another maximal antichain
@@ -256,7 +254,35 @@ maximalAntichains net = filter (not . hasComparableLineages) . nub $ go rootEdge
               _            -> error "maximalAntichains: unreachable!"
         in eset : res
 
-    hasComparableLineages :: IntSet -> Bool
-    hasComparableLineages eset = any (\(i,j) -> isDesc i j || isDesc j i) [(i,j) | i <- ISet.toList eset, j <- ISet.toList eset, i /= j]
+    allDescendents = IMap.fromList $ zip [0..] $ flip map elist $ \e ->
+      let cs = childEdges e elist
+      in ISet.fromList . concat $ cs : map (\c -> (elist !! c) `childEdges` elist) cs
 
--- maximalAntichains :: RTCN -> [IntSet]
+    -- self-explanatory
+    isDesc :: Int -> Int -> Bool
+    isDesc i j = i `ISet.member` (allDescendents ! j)
+
+    hasComparableLineages :: IntSet -> Bool
+    hasComparableLineages eset = any (\(i,j) -> i == j || isDesc i j || isDesc j i) [(i,j) | i <- ISet.toList eset, j <- ISet.toList eset, i /= j]
+
+    -- finally we get the antichains
+    antichains :: [(IntSet, Int)]
+    antichains = zipWith (curry swap) [0..] . filter (not . hasComparableLineages) . nub $ go rootEdges
+
+    -- now we compute the "edges" in the lattice of maximal antichains
+    -- if we were working with trees, this could have been done together with generating antichains (ancestral configurations)
+    -- now, however, my way of generating antichains is stupid, and i need to compute the coverings separately by checking each pair of antichains
+
+    coverings = concatMap getEdgesForAntichain antichains
+
+    getEdgesForAntichain (eset, idx) =
+      -- as above, gen potential children lineages, and then filter out the ones that are not antichains in the list above
+      -- the difference is that we are also keeping track of antichain indices
+      let childrenLineages = IMap.filterWithKey (\k _ -> k `ISet.member` eset) allChildren
+          candidates = concat $ flip map (IMap.toAscList childrenLineages) $ \case
+              (_, [])      -> []
+              (i, [a])     -> go $ ISet.delete i $ ISet.insert a eset
+              (i, [a,b])   -> go $ ISet.delete i $ ISet.insert a $ ISet.insert b eset
+              (i, [a,b,c]) -> go $ ISet.delete i $ ISet.insert a $ ISet.insert b $ ISet.insert c eset
+              _            -> error "maximalAntichains: unreachable!"
+        in [(fromJust $ lookup c antichains, idx) | c <- candidates, c `elem` map fst antichains]
