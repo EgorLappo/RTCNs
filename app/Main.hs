@@ -8,4 +8,6 @@ import           GraphViz
 import           RTCN
 
 main :: IO ()
-main = drawAll "rtcn-pics" 7 5
+main = do
+  drawAllRtcnTopologiesAndLattices "rtcn-pics" 7 5
+

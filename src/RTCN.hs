@@ -6,7 +6,7 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 {-# LANGUAGE LambdaCase #-}
 
-module RTCN where -- (RTCN, Lineages, Lineages'(..), rtcns, rtcnTopologies, rtcnToGraph, edgeList, maximalAntichains) where
+module RTCN (RTCN, Lineages, Lineages'(..), rtcns, rtcnTopologies, rtcnToGraph, edgeList, maximalAntichains, antichainLatticeGraph) where
 
 import           Data.IntMap                       (IntMap, (!))
 import qualified Data.IntMap                       as IMap
@@ -18,6 +18,16 @@ import qualified Data.Graph.Inductive.PatriciaTree as G
 import           Data.List                         (nub)
 import           Data.Maybe                        (fromJust)
 import           Data.Tuple                        (swap)
+
+--- DEBUG CODE: very useful, can be used with `seq` as
+-- `seq (dbg x) y` to print out the value of x and return y
+import           System.IO.Unsafe                  (unsafePerformIO)
+
+dbg :: Show a => a -> a
+dbg a = unsafePerformIO $ do
+  print a
+  return a
+
 
 -- backward construction (proper)
 
@@ -246,7 +256,7 @@ maximalAntichains net = (antichains, coverings)
       | ISet.null eset = []
       | otherwise = let
           childrenLineages = IMap.filterWithKey (\k _ -> k `ISet.member` eset) allChildren
-          res = concat $ flip map (IMap.toAscList childrenLineages) $ \case
+          res = flip concatMap (IMap.toAscList childrenLineages) $ \case
               (_, [])      -> []
               (i, [a])     -> go $ ISet.delete i $ ISet.insert a eset
               (i, [a,b])   -> go $ ISet.delete i $ ISet.insert a $ ISet.insert b eset
@@ -279,10 +289,17 @@ maximalAntichains net = (antichains, coverings)
       -- as above, gen potential children lineages, and then filter out the ones that are not antichains in the list above
       -- the difference is that we are also keeping track of antichain indices
       let childrenLineages = IMap.filterWithKey (\k _ -> k `ISet.member` eset) allChildren
-          candidates = concat $ flip map (IMap.toAscList childrenLineages) $ \case
+          candidates = flip concatMap (IMap.toAscList childrenLineages) $ \case
               (_, [])      -> []
-              (i, [a])     -> go $ ISet.delete i $ ISet.insert a eset
-              (i, [a,b])   -> go $ ISet.delete i $ ISet.insert a $ ISet.insert b eset
-              (i, [a,b,c]) -> go $ ISet.delete i $ ISet.insert a $ ISet.insert b $ ISet.insert c eset
+              (i, [a])     -> [ISet.delete i $ ISet.insert a eset]
+              (i, [a,b])   -> [ISet.delete i $ ISet.insert a $ ISet.insert b eset]
+              (i, [a,b,c]) -> [ISet.delete i $ ISet.insert a $ ISet.insert b $ ISet.insert c eset]
               _            -> error "maximalAntichains: unreachable!"
         in [(fromJust $ lookup c antichains, idx) | c <- candidates, c `elem` map fst antichains]
+
+antichainLatticeGraph :: RTCN -> G.Gr Int ()
+antichainLatticeGraph net = mkGraph nodes edges
+  where
+    (antichains, coverings) = maximalAntichains net
+    nodes = map (\(_, i) -> (i,i)) antichains
+    edges = [(i, j, ()) | (i,j) <- coverings]

@@ -6,9 +6,9 @@
 
 resolver: nightly-2023-04-17
 
-# nix:
-#   enable: true
-#   packages: [graphviz]
+nix:
+  enable: true
+  packages: [graphviz]
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
