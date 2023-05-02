@@ -13,9 +13,10 @@ import qualified Data.IntMap                       as IMap
 import           Data.IntSet                       (IntSet, (\\))
 import qualified Data.IntSet                       as ISet
 
+import           Data.Function                     (on)
 import           Data.Graph.Inductive              (mkGraph)
 import qualified Data.Graph.Inductive.PatriciaTree as G
-import           Data.List                         (nub)
+import           Data.List                         (groupBy, nub, sortOn)
 import           Data.Maybe                        (fromJust)
 import           Data.Tuple                        (swap)
 
@@ -289,13 +290,19 @@ maximalAntichains net = (antichains, coverings)
       -- as above, gen potential children lineages, and then filter out the ones that are not antichains in the list above
       -- the difference is that we are also keeping track of antichain indices
       let childrenLineages = IMap.filterWithKey (\k _ -> k `ISet.member` eset) allChildren
-          candidates = flip concatMap (IMap.toAscList childrenLineages) $ \case
+          candidates = flip concatMap (transformChildren $ IMap.toAscList childrenLineages) $ \case
               (_, [])      -> []
-              (i, [a])     -> [ISet.delete i $ ISet.insert a eset]
-              (i, [a,b])   -> [ISet.delete i $ ISet.insert a $ ISet.insert b eset]
-              (i, [a,b,c]) -> [ISet.delete i $ ISet.insert a $ ISet.insert b $ ISet.insert c eset]
+              (ls, [a])     -> [ISet.insert a eset \\ ISet.fromList ls]
+              (ls, [a,b])   -> [ISet.insert a $ ISet.insert b eset \\ ISet.fromList ls]
+              (ls, [a,b,c]) -> [ISet.insert a $ ISet.insert b $ ISet.insert c eset \\ ISet.fromList ls]
               _            -> error "maximalAntichains: unreachable!"
         in [(fromJust $ lookup c antichains, idx) | c <- candidates, c `elem` map fst antichains]
+
+    -- sometimes two edges point to the same node, and then we have to delete them all to get an edge corresponding to the covering
+    transformChildren :: [(Int, [Int])] -> [([Int], [Int])]
+    transformChildren xs =
+      let grouped = groupBy (\(_, a) (_, b) -> a == b) . sortOn snd $ xs
+      in map (\ys -> (map fst ys, snd $ head ys)) grouped
 
 antichainLatticeGraph :: RTCN -> G.Gr Int ()
 antichainLatticeGraph net = mkGraph nodes edges
