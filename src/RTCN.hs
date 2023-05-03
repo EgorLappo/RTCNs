@@ -6,7 +6,7 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 {-# LANGUAGE LambdaCase #-}
 
-module RTCN (RTCN, Lineages, Lineages'(..), rtcns, rtcnTopologies, rtcnToGraph, edgeList, maximalAntichains, antichainLatticeGraph) where
+module RTCN where --(RTCN, Lineages, Lineages'(..), rtcns, rtcnTopologies, rtcnToGraph, edgeList, maximalAntichains, antichainLatticeGraph) where
 
 import           Data.IntMap                       (IntMap, (!))
 import qualified Data.IntMap                       as IMap
@@ -265,9 +265,14 @@ maximalAntichains net = (antichains, coverings)
               _            -> error "maximalAntichains: unreachable!"
         in eset : res
 
-    allDescendents = IMap.fromList $ zip [0..] $ flip map elist $ \e ->
-      let cs = childEdges e elist
-      in ISet.fromList . concat $ cs : map (\c -> (elist !! c) `childEdges` elist) cs
+    allDescendents :: IntMap IntSet
+    allDescendents = let
+        ds = IMap.fromList $ zip [0..] $ map descendents elist
+        descendents edge = case edge `childEdges` elist of
+          [] -> ISet.empty
+          cs -> ISet.unions $ ISet.fromList cs : map (ds !) cs
+      in ds
+
 
     -- self-explanatory
     isDesc :: Int -> Int -> Bool
@@ -310,3 +315,5 @@ antichainLatticeGraph net = mkGraph nodes edges
     (antichains, coverings) = maximalAntichains net
     nodes = map (\(_, i) -> (i,i)) antichains
     edges = [(i, j, ()) | (i,j) <- coverings]
+
+
