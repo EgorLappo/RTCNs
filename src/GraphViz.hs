@@ -54,7 +54,7 @@ drawAllRtcnTopologiesAndLattices folder n r = sequence_ $ do
   i <- [3..n]
   j <- [0..(min r (i-2))]
   (l, net) <- zip [1..] $ rtcnTopologies i j
-  let lat = antichainLatticeGraph net
+  let (lat, _, _) = antichainLatticeGraphData net
   return $ do
     rtcnDraw net $ folder <> "/" <> show i <> "_" <> show j <> "_" <> show l <> ".pdf"
     latticeDraw lat $ folder <> "/" <> show i <> "_" <> show j <> "_" <> show l <> "_lattice.pdf"

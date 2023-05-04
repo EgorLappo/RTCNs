@@ -6,7 +6,7 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 {-# LANGUAGE LambdaCase #-}
 
-module RTCN where --(RTCN, Lineages, Lineages'(..), rtcns, rtcnTopologies, rtcnToGraph, edgeList, maximalAntichains, antichainLatticeGraph) where
+module RTCN (RTCN, Lineages, Lineages'(..), rtcns, rtcnTopologies, rtcnToGraph, edgeList, maximalAntichains, countPaths, antichainLatticeGraphData) where
 
 import           Data.IntMap                       (IntMap, (!))
 import qualified Data.IntMap                       as IMap
@@ -273,7 +273,6 @@ maximalAntichains net = (antichains, coverings)
           cs -> ISet.unions $ ISet.fromList cs : map (ds !) cs
       in ds
 
-
     -- self-explanatory
     isDesc :: Int -> Int -> Bool
     isDesc i j = i `ISet.member` (allDescendents ! j)
@@ -309,11 +308,21 @@ maximalAntichains net = (antichains, coverings)
       let grouped = groupBy (\(_, a) (_, b) -> a == b) . sortOn snd $ xs
       in map (\ys -> (map fst ys, snd $ head ys)) grouped
 
-antichainLatticeGraph :: RTCN -> G.Gr Int ()
-antichainLatticeGraph net = mkGraph nodes edges
+-- returns the graph, number of nodes, and number of paths
+antichainLatticeGraphData :: RTCN -> (G.Gr Int (), Int, Int)
+antichainLatticeGraphData net = (mkGraph nodes edges, length nodes, countPaths coverings)
   where
     (antichains, coverings) = maximalAntichains net
     nodes = map (\(_, i) -> (i,i)) antichains
     edges = [(i, j, ()) | (i,j) <- coverings]
 
+countPaths :: [Edge] -> Int
+countPaths elist = let
+    adjList = IMap.fromListWith (++) $ map (\(i,j) -> (i, [j])) elist
+    -- guaranteed to exist uniquely by the lattice property (this is a node corresponding to an antichain consisting of all leaf lineages)
+    [initialNode] = ISet.toList $ (IMap.keysSet adjList) `ISet.difference` (ISet.fromList $ concat $ IMap.elems adjList)
+    go i = case IMap.lookup i adjList of
+      Nothing -> 1
+      Just js -> sum $ map go js
+  in go initialNode
 
