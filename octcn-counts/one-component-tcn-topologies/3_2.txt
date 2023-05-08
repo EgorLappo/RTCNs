@@ -1,7 +1,0 @@
-[(1,LeafNode),(2,TreeNode 3 4),(3,TreeNode 6 4),(4,RetNode 5),(5,LeafNode),(6,TreeNode 7 8),(7,TreeNode 1 8),(8,RetNode 9),(9,LeafNode)]
-[(1,LeafNode),(2,TreeNode 3 6),(3,TreeNode 1 7),(4,RetNode 5),(5,LeafNode),(6,TreeNode 4 8),(7,TreeNode 4 8),(8,RetNode 9),(9,LeafNode)]
-[(1,LeafNode),(2,TreeNode 3 6),(3,TreeNode 1 4),(4,RetNode 5),(5,LeafNode),(6,TreeNode 7 8),(7,TreeNode 4 8),(8,RetNode 9),(9,LeafNode)]
-[(1,LeafNode),(2,TreeNode 3 4),(3,TreeNode 1 6),(4,RetNode 5),(5,LeafNode),(6,TreeNode 7 8),(7,TreeNode 4 8),(8,RetNode 9),(9,LeafNode)]
-[(1,LeafNode),(2,TreeNode 3 7),(3,TreeNode 6 4),(4,RetNode 5),(5,LeafNode),(6,TreeNode 1 8),(7,TreeNode 4 8),(8,RetNode 9),(9,LeafNode)]
-[(1,LeafNode),(2,TreeNode 3 4),(3,TreeNode 6 7),(4,RetNode 5),(5,LeafNode),(6,TreeNode 1 8),(7,TreeNode 4 8),(8,RetNode 9),(9,LeafNode)]
-[(1,LeafNode),(2,TreeNode 3 4),(3,TreeNode 1 7),(4,RetNode 5),(5,LeafNode),(6,TreeNode 2 8),(7,TreeNode 4 8),(8,RetNode 9),(9,LeafNode)]
