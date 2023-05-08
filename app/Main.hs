@@ -13,7 +13,7 @@ main :: IO ()
 main = let
     n=7
     r = 5
-    folder = "rtcn-pics"
+    folder = "rtcn-pics-unlabeled"
   in do
       counts <- sequence $ do
         i <- [3..n]
@@ -21,7 +21,7 @@ main = let
         (l, net) <- zip [1..] $ rtcnTopologies i j
         let (lat, nnodes, npaths) = antichainLatticeGraphData net
         return $ do
-          rtcnDraw net $ folder <> "/" <> show i <> "_" <> show j <> "_" <> show l <> ".pdf"
+          rtcnDrawNoNodeLabels net $ folder <> "/" <> show i <> "_" <> show j <> "_" <> show l <> ".pdf"
           latticeDraw lat $ folder <> "/" <> show i <> "_" <> show j <> "_" <> show l <> "_lattice.pdf"
           return (i, j, l, nnodes, npaths)
       -- write the tuples in counts to a csv

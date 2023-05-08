@@ -2,3 +2,7 @@
 *~
 tex/
 rtcn-pics/
+rtcn-pics-unlabeled/
+octcn-counts/
+*.zip
+*.ipynb

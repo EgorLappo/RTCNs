@@ -20,6 +20,26 @@ rtcnDraw rtcn name = let
     f <- runGraphviz dotGraph Pdf name
     putStrLn $ "Wrote " ++ f
 
+rtcnDrawNoNodeLabels :: RTCN -> String -> IO ()
+rtcnDrawNoNodeLabels rtcn name = let
+    graphParams = nonClusteredParams {
+      G.globalAttributes = [
+        G.NodeAttrs [
+          G.Shape G.Circle,
+          G.Style [G.SItem G.Filled []],
+          G.fillColor G.Gray,
+          G.toLabel "",
+          G.Height 0.2,
+          G.Width 0.2
+        ]
+      ],
+      G.fmtEdge = const []
+    }
+    dotGraph = graphToDot graphParams $ emap (const "") $ rtcnToGraph rtcn
+  in do
+    f <- runGraphviz dotGraph Pdf name
+    putStrLn $ "Wrote " ++ f
+
 latticeDraw :: DynGraph g => g Int () -> String -> IO ()
 latticeDraw lattice name = let
   graphParams = nonClusteredParams {
@@ -29,7 +49,6 @@ latticeDraw lattice name = let
         G.Shape G.Circle,
         G.Style [G.SItem G.Filled []],
         G.fillColor G.Purple,
-        G.FontSize 8,
         G.toLabel "",
         G.Height 0.25,
         G.Width 0.25
