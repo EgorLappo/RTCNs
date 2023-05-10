@@ -618,64 +618,6 @@ sameNodeType (TreeNode _ _) (TreeNode _ _) = True
 sameNodeType (SubdivNode _) (SubdivNode _) = True
 sameNodeType _ _                           = False
 
-
-relabelTree :: RPN -> RPN
-relabelTree t
-  | not (tree t) = error "relabelTree: input is not a tree"
-  | otherwise = snd $ execState (go t (root t)) (0, IMap.empty)
-  where go :: RPN -> Int -> State (Int, RPN) ()
-        go t' i = case t' ! i of
-          LeafNode -> do
-            (n, m) <- get
-            put (n+1, IMap.insert n LeafNode m)
-          TreeNode l r -> do
-            (n, m) <- get
-            go t' l
-            go t' r
-            put (n+1, IMap.insert n LeafNode m)
-          _ -> error "relabelTree: unreachable"
-
-relabelRPN :: RPN -> RPN
-relabelRPN network = let (_, resultNet, _) = execState (go network (root network)) (0, IMap.empty, ISet.empty)
-  in resultNet
-  where go :: RPN -> Int -> State (Int, RPN, ISet.IntSet) ()
-        go net node = do
-          (n, nResult, visited) <- get
-          if node `ISet.member` visited
-            then return ()
-            else do
-              put (n+1, IMap.insert n (net ! node) nResult, node `ISet.insert` visited)
-              case net ! node of
-                LeafNode -> return ()
-                TreeNode l r -> do
-                  go net l
-                  go net r
-                SubdivNode c -> go net c
-                RetNode c -> go net c
-
--- ????
-collapseSubdivisions :: RPN -> RPN
-collapseSubdivisions network =
-  let (_, resultNet, _) = execState (go network (root network)) (0, IMap.empty, ISet.empty)
-  in resultNet
-  where go :: RPN -> Int -> State (Int, RPN, ISet.IntSet) ()
-        go net node = do
-          (n, nResult, visited) <- get
-          if node `ISet.member` visited
-            then return ()
-            else do
-              put (n+1, IMap.insert n (net ! node) nResult, node `ISet.insert` visited)
-              case net ! node of
-                LeafNode -> return ()
-                TreeNode l r -> do
-                  go net l
-                  go net r
-                SubdivNode c -> do
-                  go net c
-                  let (n', nResult', visited') = execState (go net c) (n, nResult, visited)
-                  put (n', IMap.insert n (net ! c) nResult', visited')
-                RetNode c -> go net c
-
 printRPN :: RPN -> IO ()
 printRPN net =
       let
